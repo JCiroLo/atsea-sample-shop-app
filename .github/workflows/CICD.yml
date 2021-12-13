@@ -1,0 +1,91 @@
+name: CI / CD
+
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2      
+      -
+        name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Build the java app image
+        run: docker build app/ -t ${{ secrets.DOCKERHUB_USERNAME }}/java-app:latest -t ${{ secrets.DOCKERHUB_USERNAME }}/java-app:${{ github.sha }} 
+      -  
+        name: push the java app image
+        run : docker push --all-tags ${{ secrets.DOCKERHUB_USERNAME }}/java-app
+      -
+        name: Build the database image
+        run: docker build database/ -t ${{ secrets.DOCKERHUB_USERNAME }}/database:latest -t ${{ secrets.DOCKERHUB_USERNAME }}/database:${{ github.sha }} 
+      -
+        name: push the database image  
+        run:  docker push --all-tags ${{ secrets.DOCKERHUB_USERNAME }}/database        
+      -  
+        name: Build the payment gateway image
+        run: docker build payment_gateway/ -t ${{ secrets.DOCKERHUB_USERNAME }}/payment-gateway:latest -t ${{ secrets.DOCKERHUB_USERNAME }}/payment-gateway:${{ github.sha }} 
+      -
+        name: push the payment gateway image
+        run:  docker push --all-tags ${{ secrets.DOCKERHUB_USERNAME }}/payment-gateway  
+      -  
+        name: Build the reverse proxy image
+        run: docker build reverse_proxy/ -t ${{ secrets.DOCKERHUB_USERNAME }}/reverse-proxy:latest -t ${{ secrets.DOCKERHUB_USERNAME }}/reverse-proxy:${{ github.sha }} 
+      -
+        name: push the reverse proxy image
+        run:  docker push --all-tags ${{ secrets.DOCKERHUB_USERNAME }}/reverse-proxy 
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      
+      - name: Check if the instance is running
+        run: | 
+          state=`(aws ec2 describe-instance-status --instance-id ${{ secrets.INSTANCE_ID }}) | grep -w "running" | wc -l`;
+          if [ "$state" -eq 0 ]; then aws ec2 start-instances --instance-ids ${{ secrets.INSTANCE_ID }}; fi
+      
+      - name: Transfer files via ssh key
+        uses: appleboy/scp-action@master
+        with:      
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.INSTANCE_USERNAME }}
+          key: ${{ secrets.INSTANCE_KEY }}
+          source: "./docker-compose.yml, ./devsecrets"
+          target: "/home/${{ secrets.INSTANCE_USERNAME }}"
+
+      - name: executing remote ssh commands using key
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.INSTANCE_USERNAME }}
+          key: ${{ secrets.INSTANCE_KEY }}
+          script: |
+                docker-compose up -d
+      - name: Trigger end to end tests
+        run: |
+          curl --request POST \ 
+          --url https://api.github.com/repos/JCiroLo/atsea-sample-shop-testing/dispatches \
+          --header 'authorization: Bearer ${{ secrets.ACCESS_TOKEN }}' \
+          --header 'Accept: application/vnd.github.v3+json' \
+          --data '{
+            "event_type": "deployed"
+            }' \
+          --fail
