@@ -45,6 +45,7 @@ jobs:
         run:  docker push --all-tags ${{ secrets.DOCKERHUB_USERNAME }}/reverse-proxy 
 
   deploy:
+    needs: docker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
