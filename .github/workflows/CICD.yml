@@ -83,4 +83,4 @@ jobs:
                 docker-compose up -d
       - name: Trigger end to end tests
         run: |
-          curl -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.REPO_ACCESS_TOKEN }}" --request POST --data '{"event_type": "deployed"}' https://api.github.com/repos/JCiroLo/atSeaShop-tests/dispatches
+          curl -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.REPO_ACCESS_TOKEN }}" --request POST --data '{"event_type": "deployed"}' https://api.github.com/repos/JCiroLo/atsea-sample-shop-testing/dispatches
