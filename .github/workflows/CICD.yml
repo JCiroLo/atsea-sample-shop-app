@@ -79,6 +79,7 @@ jobs:
           username: ${{ secrets.INSTANCE_USERNAME }}
           key: ${{ secrets.INSTANCE_KEY }}
           script: |
+                sudo docker swarm init
                 sudo `which docker-compose` up -d
       - name: Trigger end to end tests
         run: |
